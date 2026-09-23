@@ -1,0 +1,78 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Build all packages
+    cmds:
+      - go build ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  lint:
+    desc: Run gofmt, go vet, and golangci-lint
+    cmds:
+      - gofmt -l .
+      - go vet ./...
+      - golangci-lint run
+
+  fmt:
+    desc: Apply gofmt and goimports
+    cmds:
+      - gofmt -w .
+      - goimports -w -local github.com/fireline-security .
+
+  tidy:
+    desc: Tidy go.mod/go.sum
+    cmds:
+      - go mod tidy
+
+  test:
+    desc: Run domain/config tests and the memory-backed storage contract suite (no external service needed)
+    cmds:
+      - go test ./... -race
+
+  test-integration:
+    desc: Additionally run the Postgres contract test, via testcontainers-go or POSTGRES_TEST_DSN
+    cmds:
+      - go test -tags=integration ./... -race
+
+  coverage:
+    desc: Run the same suite as `test` with coverage instrumentation, print a per-package summary, and fail below an 85% minimum
+    cmds:
+      - |
+        set -e
+        # -coverpkg=./... (not just -coverprofile) so a call into another
+        # package (e.g. internal/storage/memory's test calling into
+        # internal/storage/storagetest's shared contract suite) is attributed
+        # to the package whose code actually ran, not left at a misleading 0%.
+        go test ./... -race -coverpkg=./... -coverprofile=coverage.out
+
+        # internal/storage/postgres needs a live Postgres (task
+        # test-integration, not this task) so it's always 0% under plain
+        # `go test ./...` — excluded from the 85% gate so the minimum
+        # reflects what this task can actually exercise, not a package this
+        # scope structurally can't reach. Filtering the raw *profile*
+        # (before go tool cover computes the total), not just its text
+        # output, matters here — filtering only the printed table would
+        # leave the "total:" line computed from the unfiltered profile.
+        grep -v '/internal/storage/postgres/' coverage.out > coverage.gate.out
+        go tool cover -func=coverage.gate.out
+        pct=$(go tool cover -func=coverage.gate.out | tail -1 | awk '{print $NF}' | tr -d '%')
+        rm coverage.gate.out
+        awk -v p="$pct" 'BEGIN {
+          if (p + 0 < 85) { printf "coverage %.1f%% is below the 85%% minimum\n", p; exit 1 }
+          printf "coverage %.1f%% meets the 85%% minimum\n", p
+        }'
+
+  migrate:
+    desc: Apply pending migrations for FIRELINE_STORAGE_BACKEND (default postgres)
+    cmds:
+      - go run ./cmd/fireline migrate
+
+  demo:
+    desc: Insert the bundled example Observation and read it back
+    cmds:
+      - go run ./cmd/fireline import

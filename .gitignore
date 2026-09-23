@@ -1,0 +1,10 @@
+/bin/
+.claude/
+
+coverage.out
+.DS_Store
+.env
+fireline-demo.db
+fireline-demo.db-wal
+.mcp.json
+*.test

@@ -1,0 +1,23 @@
+# Local development only: a bare Postgres instance to point `fireline` at.
+# This is not the application container — that (a Chainguard-based image
+# for `fireline` itself) is a later pass's work, tracked alongside Turso
+# parity and Helm packaging.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fireline
+      POSTGRES_PASSWORD: fireline
+      POSTGRES_DB: fireline
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fireline"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    volumes:
+      - fireline-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  fireline-postgres-data:
